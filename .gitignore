@@ -1,0 +1,8 @@
+__pycache__/
+**/__pycache__/
+.codex/
+.history/
+.memory/
+.mypy_cache/
+.opencode/
+.vscode/
