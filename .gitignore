@@ -3,6 +3,8 @@ __pycache__/
 .codex/
 .history/
 .memory/
+.literature_explainer_tmp/
 .mypy_cache/
 .opencode/
 .vscode/
+.opencode

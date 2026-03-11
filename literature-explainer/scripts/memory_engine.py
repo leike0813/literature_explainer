@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_MEMORY_DIR = ".memory"
-DEFAULT_MEMORY_FILE = "literature-explainer.memory.jsonl"
+DEFAULT_MEMORY_FILE = ""
+MEMORY_FILE_SUFFIX = ".memory.jsonl"
 SCHEMA_VERSION = 3
 VALID_STAGES = {"initial_analysis", "qa", "note"}
 VALID_SOURCE_TYPES = {"web_url", "reference_title"}
@@ -30,8 +31,20 @@ def _print_json(data: dict[str, Any], exit_code: int = 0) -> None:
     raise SystemExit(exit_code)
 
 
-def _resolve_memory_path(memory_dir: str, memory_file: str) -> Path:
-    return Path.cwd() / memory_dir / memory_file
+def _memory_dir_path(memory_dir: str) -> Path:
+    return Path.cwd() / memory_dir
+
+
+def _default_memory_file_name(paper_key: str) -> str:
+    return f"{paper_key}{MEMORY_FILE_SUFFIX}"
+
+
+def _resolve_memory_path(memory_dir: str, memory_file: str, paper_key: str = "") -> Path:
+    if memory_file:
+        return _memory_dir_path(memory_dir) / memory_file
+    if not paper_key.strip():
+        _print_json({"ok": False, "error": "paper_key_required_for_default_memory_path"}, exit_code=1)
+    return _memory_dir_path(memory_dir) / _default_memory_file_name(paper_key)
 
 
 def _ensure_parent(path: Path) -> None:
@@ -335,6 +348,9 @@ def _instruction_specs() -> dict[str, dict[str, Any]]:
                 "read_policy": {
                     "default_schema_filter": SCHEMA_VERSION,
                     "ignore_legacy_by_default": True,
+                    "analysis_scope": "paper_global",
+                    "qa_scope": "current_session_only",
+                    "single_note_record_only": True,
                 },
                 "note_generation": {
                     "consume_memory_directly": True,
@@ -356,11 +372,13 @@ def _instruction_specs() -> dict[str, dict[str, Any]]:
                         "未解决点/后续动作",
                     ],
                     "write_back_final_note": True,
+                    "note_memory_update_mode": "overwrite_existing_note",
                 },
                 "caution_points": [
                     "Do not enter note generation without explicit user consent.",
                     "Do not use raw answer text as a fallback source.",
                     "Do not expand the paper summary into a multi-section recap.",
+                    "Do not keep multiple stage=note records for the same paper.",
                 ],
                 "failure_conditions": [
                     "Missing note content for update.",
@@ -372,7 +390,7 @@ def _instruction_specs() -> dict[str, dict[str, Any]]:
                     "The available memory records are too incomplete to produce a reliable note.",
                 ],
             },
-            "output_contract": {
+                "output_contract": {
                 "read_response": {
                     "returns_raw_entries": True,
                     "filters": ["paper_key", "session_key", "limit", "include_legacy"],
@@ -382,6 +400,7 @@ def _instruction_specs() -> dict[str, dict[str, Any]]:
                     "must_keep_qa_evidence_sources_verbatim": True,
                     "paper_summary_must_be_one_paragraph": True,
                     "final_note_writeback_stage": "note",
+                    "note_record_uniqueness": "one_per_paper",
                 },
                 "update_payload": {
                     "stage": "note",
@@ -541,26 +560,67 @@ def handle_update(args: argparse.Namespace) -> None:
         )
 
     payload_obj = _validate_payload(payload)
-    memory_path = _resolve_memory_path(args.memory_dir, args.memory_file)
+    paper_key = str(payload_obj["paper_key"])
+    memory_path = _resolve_memory_path(args.memory_dir, args.memory_file, paper_key=paper_key)
     _ensure_parent(memory_path)
     entry = _build_stage_entry(payload_obj)
 
-    with memory_path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    existing_entries = _read_jsonl(memory_path)
+    if entry["stage"] == "note":
+        existing_entries = [item for item in existing_entries if str(item.get("stage")) != "note"]
+    existing_entries.append(entry)
+
+    with memory_path.open("w", encoding="utf-8") as handle:
+        for item in existing_entries:
+            handle.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     _print_json({"ok": True, "mode": "update", "path": str(memory_path), "entry": entry})
 
 
 def handle_read(args: argparse.Namespace) -> None:
-    memory_path = _resolve_memory_path(args.memory_dir, args.memory_file)
-    entries = _read_jsonl(memory_path)
+    if args.memory_file:
+        memory_path = _resolve_memory_path(args.memory_dir, args.memory_file)
+        entries = _read_jsonl(memory_path)
+    elif args.paper_key:
+        memory_path = _resolve_memory_path(args.memory_dir, "", paper_key=args.paper_key)
+        entries = _read_jsonl(memory_path)
+    else:
+        memory_root = _memory_dir_path(args.memory_dir)
+        memory_path = memory_root
+        entries = []
+        if memory_root.exists():
+            for path in sorted(memory_root.glob(f"*{MEMORY_FILE_SUFFIX}")):
+                entries.extend(_read_jsonl(path))
 
     if not args.include_legacy:
         entries = [entry for entry in entries if int(entry.get("schema_version", -1)) == SCHEMA_VERSION]
-    if args.paper_key:
-        entries = [entry for entry in entries if str(entry.get("paper_key")) == args.paper_key]
-    if args.session_key:
-        entries = [entry for entry in entries if str(entry.get("session_key")) == args.session_key]
+    if args.paper_key and args.session_key:
+        entries = [
+            entry
+            for entry in entries
+            if str(entry.get("paper_key")) == args.paper_key
+            and (
+                str(entry.get("stage")) in {"initial_analysis", "note"}
+                or str(entry.get("session_key")) == args.session_key
+            )
+        ]
+    else:
+        if args.paper_key:
+            entries = [entry for entry in entries if str(entry.get("paper_key")) == args.paper_key]
+        if args.session_key:
+            entries = [entry for entry in entries if str(entry.get("session_key")) == args.session_key]
+
+    latest_note: dict[str, Any] | None = None
+    filtered_entries: list[dict[str, Any]] = []
+    for entry in entries:
+        if str(entry.get("stage")) == "note":
+            latest_note = entry
+            continue
+        filtered_entries.append(entry)
+    if latest_note is not None:
+        filtered_entries.append(latest_note)
+    entries = filtered_entries
+
     if args.limit is not None and args.limit >= 0:
         entries = entries[-args.limit :] if args.limit > 0 else []
 
@@ -580,7 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Memory engine for literature-explainer.")
     parser.add_argument("--mode", required=True, choices=["instructions", "update", "read"], help="Execution mode")
     parser.add_argument("--memory-dir", default=DEFAULT_MEMORY_DIR, help="Memory directory relative to current working directory.")
-    parser.add_argument("--memory-file", default=DEFAULT_MEMORY_FILE, help="Memory JSONL file name.")
+    parser.add_argument("--memory-file", default=DEFAULT_MEMORY_FILE, help="Explicit memory JSONL file name. When omitted, defaults to the active paper-specific file.")
     parser.add_argument("--stage", help="Stage for instructions mode.")
     parser.add_argument("--payload-json", help="JSON object payload for update mode.")
     parser.add_argument("--paper-key", help="Filter by paper key in read mode.")
