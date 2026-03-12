@@ -18,14 +18,14 @@ The memory engine SHALL persist each paper into its own memory file instead of a
 - **THEN** each paper writes to a different memory file
 - **AND** records do not mix across papers by default
 
-### Requirement: Note record must be unique and overwrite previous note
-Within a paper's memory file, the system SHALL keep at most one `stage=note` record, and regenerating a note SHALL overwrite the previous note snapshot.
+### Requirement: Note content must not be written back to memory
+Within a paper's memory file, note snapshots SHALL NOT be stored as memory records; memory remains limited to initial-analysis and QA records.
 
-#### Scenario: Regenerating note overwrites old note memory
-- **GIVEN** a paper already has one `stage=note` record
-- **WHEN** the agent generates a new note for the same paper
-- **THEN** the previous `stage=note` record is removed
-- **AND** only the latest `stage=note` record remains
+#### Scenario: Regenerating note does not change memory stages
+- **GIVEN** a paper has initial-analysis and QA memory records
+- **WHEN** the agent generates or regenerates a note for that paper
+- **THEN** no `stage=note` memory record is written
+- **AND** memory stage set remains constrained to analysis and QA
 
 ### Requirement: Note file must be unique per paper
 The final study note file SHALL use a paper-specific filename and SHALL be overwritten on regeneration for the same paper.

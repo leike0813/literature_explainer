@@ -24,13 +24,14 @@ The `论文摘要` section SHALL be a single expanded paragraph based on the pap
 - **THEN** the paper-level summary is rendered as one paragraph
 - **AND** the note does not include large chapter-by-chapter paper summaries
 
-### Requirement: Note generation must use structured memory only and write back final note
-The note generation step SHALL use only structured records returned by `memory_engine read`, and after generating the final Markdown note it SHALL write back one `stage=note` record.
+### Requirement: Note generation must use structured memory only and persist file output only
+The note generation step SHALL use only structured records returned by `memory_engine read`, and after generating the final Markdown note it SHALL persist only the note file output without writing note content back into memory records.
 
-#### Scenario: Final note is generated from memory and persisted
+#### Scenario: Final note is generated from memory and persisted to file
 - **WHEN** note generation runs
 - **THEN** the agent consumes structured memory fields without relying on raw answer text
-- **AND** the final Markdown note is persisted through `update` with `stage=note`
+- **AND** the final Markdown note is persisted to `note.<paper_key>.md`
+- **AND** no `stage=note` memory write is performed
 
 ### Requirement: Each Q&A block must use a fixed four-part structure
 Within `问答摘要`, each Q&A block SHALL contain `用户问题`, `回答要点`, `证据原文`, and `未解决点/后续动作`.

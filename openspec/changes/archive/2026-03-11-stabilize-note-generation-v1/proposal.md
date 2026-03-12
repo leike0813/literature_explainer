@@ -7,7 +7,7 @@
 - 明确学习笔记生成是显式可选动作，用户可选择不生成并直接结束。
 - 将学习笔记固定为“单段论文摘要 + 以问答为核心的主体结构”。
 - 强化 `SKILL.md` 中 S2/S4/S5 的切换规则和 note 阶段固定执行顺序。
-- 强化 `memory_engine.py` 的 `instructions --stage note`，明确固定章节、Q&A 四项结构、只消费结构化记忆字段，以及生成后写回 `stage=note` 记录。
+- 强化 `memory_engine.py` 的 `instructions --stage note`，明确固定章节、Q&A 四项结构、只消费结构化记忆字段，以及生成后仅落盘 note 文件。
 
 ## Capabilities
 

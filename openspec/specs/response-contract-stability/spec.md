@@ -72,4 +72,4 @@ The Skill SHALL require explicit exit checklists for S1, S3, and S4 before leavi
 - **WHEN** it checks stage-exit conditions
 - **THEN** it confirms that the user explicitly requested note generation
 - **AND** only structured memory records were used
-- **AND** the `stage=note` record write completed
+- **AND** the final note file was written to the paper-specific path

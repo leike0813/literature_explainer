@@ -14,12 +14,12 @@
 ## 3. Memory Note Protocol Stabilization
 
 - [x] 3.1 Update `literature-explainer/scripts/memory_engine.py` note instructions with optional generation and fixed section rules
-- [x] 3.2 Update note rules to require memory-only note generation and note write-back
-- [x] 3.3 Preserve existing `update/read` operational behavior while clarifying `stage=note` semantics
+- [x] 3.2 Update note rules to require memory-only note generation and file-only note persistence
+- [x] 3.3 Preserve existing `read` behavior while removing `stage=note` write-back semantics
 
 ## 4. Validation and Finish
 
 - [x] 4.1 Verify OpenSpec readiness (`status` and `instructions apply`)
 - [x] 4.2 Validate change (`openspec validate`)
-- [x] 4.3 Check `instructions --stage note` output and note update behavior
+- [x] 4.3 Check `instructions --stage note` output and note file persistence behavior
 - [x] 4.4 Run type checking for Python scripts
