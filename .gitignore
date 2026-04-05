@@ -6,5 +6,7 @@ __pycache__/
 .literature_explainer_tmp/
 .mypy_cache/
 .opencode/
+.claude/
+.qwen/
 .vscode/
 .opencode
